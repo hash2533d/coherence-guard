@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><title>Coherence-Guard Dashboard</title></head>
+<body>
+<h1>TryHard Forge Plasma Harvest</h1>
+<input type="file" id="logfile">
+<button onclick="uploadLog()">Forge Agent</button>
+<div id="result"></div>
+<script>
+async function uploadLog() {
+  const file = document.getElementById('logfile').files[0];
+  const form = new FormData(); form.append('file', file);
+  const res = await fetch('/forge/agent', {method: 'POST', body: form});
+  const data = await res.json();
+  document.getElementById('result').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+}
+</script>
+</body>
+</html>
