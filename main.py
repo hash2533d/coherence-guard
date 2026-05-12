@@ -1,53 +1,39 @@
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-import matplotlib.pyplot as plt
-import io
-import base64
-import numpy as np
-
-from coherence import ResonanceMemory, TraitVector, GenesisOrchestrator
+import uvicorn
+from coherence import ResonanceMemory, GenesisOrchestrator, TraitVector
 from auth import verify_resonance
 
-app = FastAPI()
+app = FastAPI(title="CoherenceGuard")
 templates = Jinja2Templates(directory="templates")
+
 memory = ResonanceMemory()
+orchestrator = GenesisOrchestrator()
+latest_harvest = {"vector": None, "count": 0}
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {
+        "request": request, 
+        "total_entries": latest_harvest["count"],
+        "latest_vector": latest_harvest["vector"]
+    })
 
-@app.post("/write")
-async def write_log(data: dict, authorized: bool = Depends(verify_resonance)):
-    return {"status": "success", "message": "Log recorded"}
-
-@app.get("/read")
-async def read_logs(authorized: bool = Depends(verify_resonance)):
-    return {"logs": []}
+@app.post("/forge/agent", dependencies=[Depends(verify_resonance)])
+async def forge_agent(agent_id: str, trace: str):
+    turns = [line.strip() for line in trace.split('\n') if line.strip()]
+    vector = memory.get_trait_vector(turns)
+    latest_harvest["vector"] = vector.dict()
+    latest_harvest["count"] += 1
+    return {"status": "Resonance Captured", "vector": vector}
 
 @app.get("/status")
-async def get_status():
-    return {"status": "operational", "version": "1.0.0"}
+async def status():
+    return {
+        "latest_vector": latest_harvest["vector"],
+        "total_entries": latest_harvest["count"]
+    }
 
-@app.get("/demo-plot")
-async def demo_plot():
-    plt.figure(figsize=(5,3))
-    x = np.linspace(0, 10, 100)
-    y = np.sin(x)
-    plt.plot(x, y)
-    plt.title("Resonance Manifold")
-    
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    string = base64.b64encode(buf.read())
-    uri = 'data:image/png;base64,' + string.decode('utf-8')
-    plt.close()
-    return {"plot_url": uri}
-
-@app.post("/forge/agent")
-async def forge_agent(data: dict):
-    turns = data.get("turns", [])
-    vector = TraitVector(memory_cling=memory.score_cling(turns))
-    agent = GenesisOrchestrator().forge_agent(vector, "You are Hash's Cosmic Curator proxy.")
-    return {"trait_vector": vector.dict(), "agent_json": agent}
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
